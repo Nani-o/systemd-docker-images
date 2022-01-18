@@ -5,7 +5,7 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  setup:
     runs-on: ubuntu-latest
     steps:
       - name: Login to GitHub Container Registry
@@ -17,9 +17,13 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v2
-
+  build:
+    runs-on: ubuntu-latest
+    steps:
       - name: Build images
         run: ./setup.sh build
-
+  push:
+    runs-on: ubuntu-latest
+    steps:
       - name: Push images
         run: ./setup.sh push
