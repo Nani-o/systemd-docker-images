@@ -37,7 +37,7 @@ Available Commands:
 
 function files {
     PATTERN="${1:-.*}"
-    FILES=$(find . -name "*.Dockerfile" -maxdepth 1 | grep -e "${PATTERN}" | sort)
+    FILES=$(find ./docker -name "*.Dockerfile" -maxdepth 1 | grep -e "${PATTERN}" | sort)
     echo "$FILES"
 }
 
