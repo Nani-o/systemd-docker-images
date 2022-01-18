@@ -18,41 +18,6 @@ function container_exists {
     fi
 }
 
-function stop_containers {
-    for container in ansible node1 node2 node3; do
-        if container_exists $container; then
-            docker stop $container >/dev/null 2>&1
-            display_message "Arrêt de $container" $?
-        fi
-    done
-}
-
-function download_images {
-    docker pull nanio/ansible101:controller >/dev/null 2>&1
-    display_message "L'image ansible a été téléchargée" $?
-    docker pull nanio/ansible101:node >/dev/null 2>&1
-    display_message "L'image des noeuds a été téléchargée" $?
-}
-
-function delete_containers {
-    for container in ansible node1 node2 node3; do
-        if container_exists $container; then
-            docker rm --force $container >/dev/null 2>&1
-            display_message "Suppression de $container" $?
-        fi
-    done
-    NETWORK=$(docker network ls | grep ansible101)
-    if [[ "$NETWORK" != "" ]]; then
-        docker network rm ansible101 >/dev/null 2>&1
-        display_message "Suppression du network" $?
-    fi
-    IMAGES=$(docker images | grep "nanio/ansible101" | awk '{print $3}')
-    if [[ "$IMAGES" != "" ]]; then
-        docker rmi $IMAGES >/dev/null 2>&1
-        display_message "Suppression des images" $?
-    fi
-}
-
 function show_help {
     echo "Description:
   Ce script permet de build les Dockerfile present dans ce repo

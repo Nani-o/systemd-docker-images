@@ -2,13 +2,10 @@ FROM ubuntu:20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN sed -i 's/# deb/deb/g' /etc/apt/sources.list
-
 RUN apt-get update \
     && apt-get install -y systemd systemd-cron \
                           sudo iproute2 \
                           libffi-dev libssl-dev \
-                          language-pack-fr \
                           python3 python3-pip python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
