@@ -1,72 +1,11 @@
 #!/bin/bash
 
-TXTRED=$(tput setaf 1)
-TXTGREEN=$(tput setaf 2)
-TXTBOLD=$(tput bold)
-TXTNORMAL=$(tput sgr0)
-
-function display_message {
-    MSG="$1"
-    STATE="$2"
-    if [[ "$2" == "0" ]]; then
-        DISPLAY="[${TXTBOLD}${TXTGREEN}OK${TXTNORMAL}] - $MSG"
-    else
-        DISPLAY="[${TXTBOLD}${TXTRED}KO${TXTNORMAL}] - $MSG"
-    fi
-    echo -e "${DISPLAY}"
-}
-
 function is_binary_present {
     which $1 >/dev/null 2>&1
     if [[ "$?" != "0" ]]; then
         echo "La commande $1 est manquante"
         exit 1
      fi
-}
-
-function start {
-    create_containers
-    docker exec --user ansible -w /home/ansible/workdir/ -it ansible bash -l
-}
-
-function create_containers {
-    download_images
-    create_network ansible101 10.0.101.0/24
-    create_container ansible 10.0.101.123 nanio/ansible101:controller
-    create_container node1 10.0.101.10 nanio/ansible101:node
-    create_container node2 10.0.101.20 nanio/ansible101:node
-    create_container node3 10.0.101.30 nanio/ansible101:node
-}
-
-function create_network {
-    network_name=$1
-    network_subnet=$2
-    docker network inspect ${network_name} >/dev/null 2>&1
-    if [[ "$?" != "0" ]]; then
-        docker network create --subnet="${network_subnet}" "${network_name}" >/dev/null 2>&1
-        display_message "Création du network $network_name" $?
-    else
-        display_message "Le network ${network_name} est déjà présent" 0
-    fi
-}
-
-function create_container {
-    container_name=$1
-    container_ip=$2
-    container_image=$3
-    container_id="$(docker ps -a -q -f name=${container_name})"
-    if [[ $container_id == "" ]]; then
-        docker run -d -h "${container_name}" --name "${container_name}" --net ansible101 --ip "${container_ip}" --privileged -v /sys/fs/cgroup:/sys/fs/cgroup:ro "${container_image}" >/dev/null 2>&1
-        display_message "Création de $container_name" $?
-    else
-        is_running=$(docker inspect -f '{{.State.Running}}' $container_id)
-        if [[ "$is_running" == "false" ]]; then
-            docker start ${container_id} >/dev/null 2>&1
-            display_message "Démarrage de $container_name" $?
-        else
-            display_message "Le container ${container_name} est déjà présent" 0
-        fi
-    fi
 }
 
 function container_exists {
@@ -116,17 +55,19 @@ function delete_containers {
 
 function show_help {
     echo "Description:
-  Ce script permet de charger un environment pour réaliser des labs Ansible
+  Ce script permet de build les Dockerfile present dans ce repo
 
 Usage:
-  ./ansible101 [command]
+  ./setup.sh [command]
 
 Available Commands:
   help        Affiche cette aide
-  start       Déploie les containers pour le lab
-  download    Télécharge les images pour le lab
-  delete      Supprime les containers
-  stop        Quitte et nettoie l'environnement de lab"
+  build       Build les images Docker
+  push        Push les images
+  run         Run les images
+  rm          Supprime les containers
+  rmi         Supprime les images
+"
 }
 
 function files {
@@ -139,6 +80,14 @@ function build {
     for DOCKERFILE in $1; do
         IFS=- read distro version <<< "$(basename "${DOCKERFILE}" | sed -E 's/([a-z]*)([0-9]*.*).Dockerfile/\1-\2/g')"
         docker build -f ${DOCKERFILE} -t nanio/systemd-${distro}:${version} .
+    done
+}
+
+function push {
+    for DOCKERFILE in $1; do
+        IFS=- read distro version <<< "$(basename "${DOCKERFILE}" | sed -E 's/([a-z]*)([0-9]*.*).Dockerfile/\1-\2/g')"
+        docker image tag nanio/systemd-${distro}:${version} ghcr.io/nani-o/systemd-${distro}:${version}
+        docker image push ghcr.io/nani-o/systemd-${distro}:${version}
     done
 }
 
@@ -186,6 +135,9 @@ elif [[ "$ACTION" == "run" ]]; then
 elif [[ "$ACTION" == "rm" ]]; then
     shift
     remove "$(files "${1}")"
+elif [[ "$ACTION" == "push" ]]; then
+    shift
+    push "$(files "${1}")"
 else
     echo -e "$ACTION n'est pas une commande reconnue\n"
     show_help
