@@ -1,7 +1,9 @@
 name: Docker
+
 on:
   push:
     branches: [ master ]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,6 +14,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v2
-      - run: ./setup.sh build
-      - run: ./setup.sh push
+
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Build images
+        run: ./setup.sh build
+
+      - name: Push images
+        run: ./setup.sh push
