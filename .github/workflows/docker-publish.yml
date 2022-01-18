@@ -18,11 +18,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
   build:
+    needs: setup
     runs-on: ubuntu-latest
     steps:
       - name: Build images
         run: ./setup.sh build
   push:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Push images
