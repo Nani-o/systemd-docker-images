@@ -37,72 +37,82 @@ Available Commands:
 
 function files {
     PATTERN="${1:-.*}"
-    FILES=$(find . -name "*.Dockerfile" -maxdepth 1 | grep -e "${PATTERN}")
+    FILES=$(find . -name "*.Dockerfile" -maxdepth 1 | grep -e "${PATTERN}" | sort)
     echo "$FILES"
 }
 
-function build {
-    for DOCKERFILE in $1; do
-        IFS=- read distro version <<< "$(basename "${DOCKERFILE}" | sed -E 's/([a-z]*)([0-9]*.*).Dockerfile/\1-\2/g')"
-        docker build -f ${DOCKERFILE} -t nanio/systemd-${distro}:${version} .
-    done
+function _build {
+    docker build -q -f ${DOCKERFILE} -t ${LOCAL_IMAGE} .
 }
 
-function push {
-    for DOCKERFILE in $1; do
-        IFS=- read distro version <<< "$(basename "${DOCKERFILE}" | sed -E 's/([a-z]*)([0-9]*.*).Dockerfile/\1-\2/g')"
-        docker image tag nanio/systemd-${distro}:${version} ghcr.io/nani-o/systemd-${distro}:${version}
-        docker image push ghcr.io/nani-o/systemd-${distro}:${version}
-    done
+function _push {
+    docker image tag ${LOCAL_IMAGE} ${REMOTE_IMAGE}
+    docker image push -q ${REMOTE_IMAGE}
 }
 
-function rmi {
-    for DOCKERFILE in $1; do
-        IFS=- read distro version <<< "$(basename "${DOCKERFILE}" | sed -E 's/([a-z]*)([0-9]*.*).Dockerfile/\1-\2/g')"
-        id=$(docker images | grep -e "nanio/systemd-${distro} *${version}" | awk '{print $3}')
-        [[ ! -z "${id}" ]] && docker rmi -f "${id}"
-    done
+function _run {
+    _build
+    if ! container_exists ${CONTAINER_NAME}; then
+        docker run -d -h ${CONTAINER_NAME} --name ${CONTAINER_NAME} ${LOCAL_IMAGE}
+    fi
 }
 
-function run {
-    for DOCKERFILE in $1; do
-        IFS=- read distro version <<< "$(basename "${DOCKERFILE}" | sed -E 's/([a-z]*)([0-9]*.*).Dockerfile/\1-\2/g')"
-        name="test-${distro}-${version}"
-        docker run -d -h ${name} --name ${name} nanio/systemd-${distro}:${version}
-    done
+function _rm {
+    if container_exists ${CONTAINER_NAME}; then
+        docker rm -f ${CONTAINER_NAME}
+    fi
 }
 
-function remove {
-    for DOCKERFILE in $1; do
-        IFS=- read distro version <<< "$(basename "${DOCKERFILE}" | sed -E 's/([a-z]*)([0-9]*.*).Dockerfile/\1-\2/g')"
-        name="test-${distro}-${version}"
-        if container_exists $name; then
-            docker rm -f ${name}
-        fi
-    done
+function _rmi {
+    id=$(docker images | grep -e "^${IMAGE_NAME} *${TAG}" | awk '{print $3}')
+    [[ ! -z "${id}" ]] && docker rmi -f "${id}"
 }
+
+function _purge {
+    _rm
+    _rmi
+}
+
+function execute {
+    ACTION="${1}"
+    DOCKERFILE="${2}"
+    IFS=- read DISTRO TAG <<< "$(basename "${DOCKERFILE}" | sed -E 's/([a-z]*)([0-9]*.*).Dockerfile/\1-\2/g')"
+    IMAGE_NAME="nani-o/systemd-${DISTRO}"
+    LOCAL_IMAGE="${IMAGE_NAME}:${TAG}"
+    REMOTE_IMAGE="ghcr.io/${LOCAL_IMAGE}"
+    CONTAINER_NAME="systemd-${DISTRO}-${TAG}"
+    "${ACTION}"
+}
+
+function main {
+    files "${PATTERN}" | xargs -L 1 -P 0 -I {} bash -c "execute _${ACTION} {}"
+}
+
+export -f container_exists
+
+export -f execute
+export -f _build
+export -f _push
+export -f _run
+export -f _rm
+export -f _rmi
+export -f _purge
 
 is_binary_present docker
 
 ACTION="$1"
+PATTERN="$2"
 
 if [[ -z "$ACTION" || "$ACTION" == "help" ]]; then
     show_help
-elif [[ "$ACTION" == "build" ]]; then
+elif [[ "$ACTION" == "build" || \
+        "$ACTION" == "push" || \
+        "$ACTION" == "run" || \
+        "$ACTION" == "rm" || \
+        "$ACTION" == "rmi" || \
+        "$ACTION" == "purge" ]]; then
     shift
-    build "$(files "${1}")"
-elif [[ "$ACTION" == "rmi" ]]; then
-    shift
-    rmi "$(files "${1}")"
-elif [[ "$ACTION" == "run" ]]; then
-    shift
-    run "$(files "${1}")"
-elif [[ "$ACTION" == "rm" ]]; then
-    shift
-    remove "$(files "${1}")"
-elif [[ "$ACTION" == "push" ]]; then
-    shift
-    push "$(files "${1}")"
+    main
 else
     echo -e "$ACTION n'est pas une commande reconnue\n"
     show_help
